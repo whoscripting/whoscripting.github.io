@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>⌗ PortableInfobox to InfoboxNeue</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wdth,wght,ROND@6..144,25..151,1..1000,0..100&family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <main class="shell">
+    <section class="workspace" aria-label="PortableInfobox converter">
+      <div class="intro">
+        <div>
+          <!-- <p class="eyebrow">MediaWiki converter</p> -->
+          <h1>PortableInfobox to InfoboxNeue</h1>
+        </div>
+        <div class="status-pill" id="statusPill" aria-live="polite">Ready</div>
+      </div>
+
+      <div class="tool-grid">
+        <section class="panel input-panel" aria-label="PortableInfobox input">
+          <div class="panel-head">
+            <div>
+              <h2>Portable infobox</h2>
+              <p>Paste the template's <code>&lt;infobox&gt;</code> markup.</p>
+            </div>
+          </div>
+          <textarea id="sourceInput" spellcheck="false" placeholder="<infobox>
+  <title source=&quot;name&quot; />
+  <image source=&quot;image&quot;>
+    <caption source=&quot;imagecaption&quot; />
+  </image>
+  <data source=&quot;occupation&quot;>
+    <label>Occupation</label>
+  </data>
+</infobox>"></textarea>
+        </section>
+
+        <section class="panel output-panel" aria-label="InfoboxNeue output">
+          <div class="panel-head">
+            <div>
+              <h2>InfoboxNeue</h2>
+              <p>Copy the generated template or module page.</p>
+            </div>
+            <div class="segmented" role="tablist" aria-label="Output type">
+              <button type="button" class="active" id="templateTab" role="tab" aria-selected="true">Template</button>
+              <button type="button" id="moduleTab" role="tab" aria-selected="false">Module</button>
+            </div>
+          </div>
+          <div class="output-toolbar">
+            <label for="templateName">Template name</label>
+            <input id="templateName" type="text" value="Infobox character" autocomplete="off">
+            <button type="button" id="copyButton" title="Copy output">Copy</button>
+          </div>
+          <pre id="outputBox" tabindex="0"></pre>
+        </section>
+      </div>
+
+      <section class="diagnostics" aria-label="Conversion notes">
+          <p>
+            Based on PortableInfobox tags and <code>source</code> parameters from
+            <a href="https://portability.fandom.com/wiki/Portable_Infoboxes" target="_blank" rel="noreferrer">Fandom wikis</a>
+            and
+            <a href="https://www.mediawiki.org/wiki/Extension:PortableInfobox" target="_blank" rel="noreferrer">MediaWiki's PortableInfobox extension notes</a>.
+          </p>
+          <p>
+            InfoboxNeue uses <code><a href="https://starcitizen.tools/Module:InfoboxNeue" target="_blank" rel="noreferrer">Module:InfoboxNeue</a></code> and <code><a href="https://starcitizen.tools/Template:InfoboxNeue" target="_blank" rel="noreferrer">Template:InfoboxNeue</a></code> from the Star Citizen Wiki. © CC-BY-NC-SA 4.0.
+          </p>
+      </section>
+    </section>
+  </main>
+  <script src="script.js"></script>
+</body>
+</html>
