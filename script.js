@@ -444,7 +444,7 @@ function makeModuleOutput(model) {
 	}
 
 	const titleSource = model.title?.source || 'title';
-	const titleFallback = model.title?.defaultValue || (typeof mw !== 'undefined' ? mw.title.getCurrentTitle().text : 'Page Title');
+	const titleFallback = (typeof mw !== 'undefined' ? mw.title.getCurrentTitle().text : 'Page Title');
 	lines.push('    infobox:renderHeader({');
 	lines.push(`        title = ${luaArg(titleSource, titleFallback)},`);
 	lines.push('    })');
