@@ -78,9 +78,11 @@ function readBlocks(markup) {
 	const blocks = [];
 	const tokenPattern = /<(title|image|header|data|group|panel|section|label)\b[^>]*(?:\/>|>)|<!--[\s\S]*?-->/ig;
 	let match;
+	let pendingComments = [];
 
 	while ((match = tokenPattern.exec(markup)) !== null) {
 		if (match[0].startsWith('<!--')) {
+			pendingComments.push(match[0]);
 			continue;
 		}
 		const tagName = match[1].toLowerCase();
@@ -88,7 +90,8 @@ function readBlocks(markup) {
 		const start = match.index;
 
 		if (openTag.endsWith('/>')) {
-			blocks.push({ tagName, openTag, body: '', full: openTag, start });
+			blocks.push({ tagName, openTag, body: '', full: openTag, start, comments: pendingComments });
+			pendingComments = [];
 			continue;
 		}
 
@@ -96,7 +99,7 @@ function readBlocks(markup) {
 		let bodyEnd = -1;
 		let fullEnd = -1;
 
-		const searchPattern = new RegExp(`(<${tagName}\\b[^>]*(?:\\/>|>))|(</${tagName}>)`, 'ig');
+		const searchPattern = new RegExp(`(<${tagName}\\b[^>]*(?:\\/>|>))|(</${tagName}>)|<!--[\\s\\S]*?-->`, 'ig');
 		searchPattern.lastIndex = tokenPattern.lastIndex;
 
 		let subMatch;
@@ -118,12 +121,18 @@ function readBlocks(markup) {
 		if (depth === 0) {
 			const body = markup.slice(tokenPattern.lastIndex, bodyEnd);
 			const full = markup.slice(start, fullEnd);
-			blocks.push({ tagName, openTag, body, full, start });
+			blocks.push({ tagName, openTag, body, full, start, comments: pendingComments });
+			pendingComments = [];
 			tokenPattern.lastIndex = fullEnd;
 		} else {
 			// No matching close tag found
-			blocks.push({ tagName, openTag, body: '', full: openTag, start });
+			blocks.push({ tagName, openTag, body: '', full: openTag, start, comments: pendingComments });
+			pendingComments = [];
 		}
+	}
+
+	if (pendingComments.length > 0) {
+		blocks.push({ tagName: 'comment', comments: pendingComments });
 	}
 
 	return blocks;
@@ -145,25 +154,30 @@ function luaString(value) {
 }
 
 function parseBlocks(markup, notes) {
-	const comments = readComments(markup);
 	const blocks = readBlocks(markup);
 	const rows = [];
 
-	for (const comment of comments) {
-		rows.push({
-			type: 'comment',
-			content: comment
-		});
-	}
-
 	for (const block of blocks) {
+		if (block.comments && block.comments.length > 0) {
+			for (const comment of block.comments) {
+				rows.push({
+					type: 'comment',
+					content: comment
+				});
+			}
+		}
+
 		const tagName = block.tagName;
+		if (tagName === 'comment') {
+			continue;
+		}
+
 		if (tagName === 'title') {
 			rows.push({
 				type: 'title',
 				source: attrValue(block.openTag, 'source'),
 				defaultValue: stripTags(childContent(block.full, 'default')),
-				comments: readComments(block.full)
+				comments: []
 			});
 		} else if (tagName === 'image') {
 			rows.push({
@@ -172,7 +186,7 @@ function parseBlocks(markup, notes) {
 				captionSource: childAttr(block.full, 'caption', 'source'),
 				captionDefault: stripTags(childContent(block.full, 'caption')),
 				defaultValue: stripTags(childContent(block.full, 'default')),
-				comments: readComments(block.full)
+				comments: []
 			});
 		} else if (tagName === 'header') {
 			rows.push({
@@ -180,7 +194,7 @@ function parseBlocks(markup, notes) {
 				label: stripTags(block.body),
 				source: attrValue(block.openTag, 'source'),
 				defaultValue: stripTags(childContent(block.full, 'default')),
-				comments: readComments(block.full)
+				comments: []
 			});
 		} else if (tagName === 'data') {
 			rows.push(readDataBlock(block));
@@ -205,18 +219,44 @@ function parseBlocks(markup, notes) {
 			const sections = [];
 			const subBlocks = readBlocks(block.body);
 			let tabIndex = 1;
+			let defaultSectionRows = [];
+
 			for (const sub of subBlocks) {
 				if (sub.tagName === 'section') {
+					if (defaultSectionRows.length > 0) {
+						sections.push({
+							type: 'section',
+							label: `Tab ${tabIndex++}`,
+							rows: defaultSectionRows
+						});
+						defaultSectionRows = [];
+					}
 					const children = parseBlocks(sub.body, notes);
 					const titleRow = children.find(r => r.type === 'label' || r.type === 'header');
 					const label = titleRow ? (titleRow.label || titleRow.body) : '';
 					sections.push({
-							type: 'section',
+						type: 'section',
 						label: label || `Tab ${tabIndex++}`,
 						rows: children.filter(r => r !== titleRow)
 					});
+				} else if (sub.tagName === 'comment') {
+					for (const comment of sub.comments) {
+						defaultSectionRows.push({ type: 'comment', content: comment });
+					}
+				} else {
+					const parsed = parseBlocks(sub.full, notes);
+					defaultSectionRows.push(...parsed);
 				}
 			}
+
+			if (defaultSectionRows.length > 0) {
+				sections.push({
+					type: 'section',
+					label: `Tab ${tabIndex++}`,
+					rows: defaultSectionRows
+				});
+			}
+
 			rows.push({
 				type: 'panel',
 				sections: sections
@@ -309,7 +349,7 @@ function readDataBlock(block) {
 		label: stripTags(childContent(block.full, 'label')),
 		defaultValue: stripTags(childContent(block.full, 'default')),
 		formatValue: cleanText(childContent(block.full, 'format')),
-		comments: readComments(block.full)
+		comments: []
 	};
 }
 
@@ -328,7 +368,6 @@ function makeTemplateOutput(model) {
 	lines.push(`| title = ${wikitextParam(titleSource, titleFallback)}`);
 
 	if (model.image) {
-		lines.push(...prefixComments(model.image.comments));
 		lines.push(`| image = ${wikitextParam(model.image.source, model.image.defaultValue)}`);
 	}
 
@@ -345,11 +384,9 @@ function makeTemplateOutput(model) {
 				}
 				renderRows(entry.rows);
 			} else if (entry.type === 'header') {
-				lines.push(...prefixComments(entry.comments));
 				lines.push(`| section${sectionIndex} = ${entry.label || wikitextParam(entry.source, entry.defaultValue)}`);
 				sectionIndex += 1;
 			} else if (entry.type === 'data') {
-				lines.push(...prefixComments(entry.comments));
 				lines.push(`| label${itemIndex} = ${entry.label || titleCase(entry.source)}`);
 				lines.push(`| content${itemIndex} = ${templateContent(entry)}`);
 				itemIndex += 1;
@@ -402,14 +439,12 @@ function makeModuleOutput(model) {
 	);
 
 	if (model.image) {
-		lines.push(...luaComments(model.image.comments, '    '));
 		lines.push(`    infobox:renderImage(${luaArg(model.image.source, model.image.defaultValue)})`);
 		lines.push('');
 	}
 
 	const titleSource = model.title?.source || 'title';
 	const titleFallback = model.title?.defaultValue || (typeof mw !== 'undefined' ? mw.title.getCurrentTitle().text : 'Page Title');
-	lines.push(...luaComments(model.title?.comments, '    '));
 	lines.push('    infobox:renderHeader({');
 	lines.push(`        title = ${luaArg(titleSource, titleFallback)},`);
 	lines.push('    })');
@@ -480,14 +515,19 @@ function renderLuaSection(lines, section) {
 function renderLuaRows(lines, rows, tableVar) {
 	for (const row of rows) {
 		if (row.type === 'data') {
-			lines.push(...luaComments(row.comments, '        '));
 			lines.push(`        table.insert(${tableVar}, infobox:renderItem({`);
 			lines.push(`            label = ${luaString(row.label || titleCase(row.source))},`);
 			lines.push(`            data = ${luaData(row)}`);
 			lines.push('        }))');
 		} else if (row.type === 'header') {
+			let resolvedLabel;
+			if (row.label) {
+				resolvedLabel = luaString(row.label);
+			} else {
+				resolvedLabel = luaArg(row.source, row.defaultValue);
+			}
 			lines.push(`        table.insert(${tableVar}, infobox:renderItem({`);
-			lines.push(`            data = ${luaString(`'''${row.label}'''`)}`);
+			lines.push(`            data = "'''" .. ${resolvedLabel} .. "'''"`);
 			lines.push('        }))');
 		} else if (row.type === 'image') {
 			lines.push(`        table.insert(${tableVar}, infobox:renderImage(${luaArg(row.source, row.defaultValue)}))`);
