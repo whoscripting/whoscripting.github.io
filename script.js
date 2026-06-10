@@ -76,10 +76,13 @@ function noIncludeInner(input) {
 
 function readBlocks(markup) {
 	const blocks = [];
-	const tokenPattern = /<(title|image|header|data|group|panel|section|label)\b[^>]*(?:\/>|>)/ig;
+	const tokenPattern = /<(title|image|header|data|group|panel|section|label)\b[^>]*(?:\/>|>)|<!--[\s\S]*?-->/ig;
 	let match;
 
 	while ((match = tokenPattern.exec(markup)) !== null) {
+		if (match[0].startsWith('<!--')) {
+			continue;
+		}
 		const tagName = match[1].toLowerCase();
 		const openTag = match[0];
 		const start = match.index;
@@ -89,18 +92,38 @@ function readBlocks(markup) {
 			continue;
 		}
 
-		const closePattern = new RegExp(`</${tagName}>`, 'ig');
-		closePattern.lastIndex = tokenPattern.lastIndex;
-		const close = closePattern.exec(markup);
-		if (!close) {
-			blocks.push({ tagName, openTag, body: '', full: openTag, start });
-			continue;
+		let depth = 1;
+		let bodyEnd = -1;
+		let fullEnd = -1;
+
+		const searchPattern = new RegExp(`(<${tagName}\\b[^>]*(?:\\/>|>))|(</${tagName}>)`, 'ig');
+		searchPattern.lastIndex = tokenPattern.lastIndex;
+
+		let subMatch;
+		while ((subMatch = searchPattern.exec(markup)) !== null) {
+			if (subMatch[1]) {
+				if (!subMatch[1].endsWith('/>')) {
+					depth++;
+				}
+			} else if (subMatch[2]) {
+				depth--;
+				if (depth === 0) {
+					bodyEnd = subMatch.index;
+					fullEnd = searchPattern.lastIndex;
+					break;
+				}
+			}
 		}
 
-		const body = markup.slice(tokenPattern.lastIndex, close.index);
-		const full = markup.slice(start, close.index + close[0].length);
-		blocks.push({ tagName, openTag, body, full, start });
-		tokenPattern.lastIndex = close.index + close[0].length;
+		if (depth === 0) {
+			const body = markup.slice(tokenPattern.lastIndex, bodyEnd);
+			const full = markup.slice(start, fullEnd);
+			blocks.push({ tagName, openTag, body, full, start });
+			tokenPattern.lastIndex = fullEnd;
+		} else {
+			// No matching close tag found
+			blocks.push({ tagName, openTag, body: '', full: openTag, start });
+		}
 	}
 
 	return blocks;
@@ -122,8 +145,17 @@ function luaString(value) {
 }
 
 function parseBlocks(markup, notes) {
+	const comments = readComments(markup);
 	const blocks = readBlocks(markup);
 	const rows = [];
+
+	for (const comment of comments) {
+		rows.push({
+			type: 'comment',
+			content: comment
+		});
+	}
+
 	for (const block of blocks) {
 		const tagName = block.tagName;
 		if (tagName === 'title') {
@@ -179,6 +211,7 @@ function parseBlocks(markup, notes) {
 					const titleRow = children.find(r => r.type === 'label' || r.type === 'header');
 					const label = titleRow ? (titleRow.label || titleRow.body) : '';
 					sections.push({
+							type: 'section',
 						label: label || `Tab ${tabIndex++}`,
 						rows: children.filter(r => r !== titleRow)
 					});
@@ -301,7 +334,10 @@ function makeTemplateOutput(model) {
 
 	function renderRows(rows) {
 		for (const entry of rows) {
-			if (entry.type === 'panel') continue;
+			if (entry.type === 'panel') {
+				renderRows(entry.sections);
+				continue;
+			}
 			if (entry.type === 'section') {
 				if (entry.label) {
 					lines.push(`| section${sectionIndex} = ${entry.label}`);
@@ -317,6 +353,8 @@ function makeTemplateOutput(model) {
 				lines.push(`| label${itemIndex} = ${entry.label || titleCase(entry.source)}`);
 				lines.push(`| content${itemIndex} = ${templateContent(entry)}`);
 				itemIndex += 1;
+			} else if (entry.type === 'comment') {
+				lines.push(entry.content);
 			}
 		}
 	}
@@ -455,6 +493,8 @@ function renderLuaRows(lines, rows, tableVar) {
 			lines.push(`        table.insert(${tableVar}, infobox:renderImage(${luaArg(row.source, row.defaultValue)}))`);
 		} else if (row.type === 'title') {
 			lines.push(`        table.insert(${tableVar}, infobox:renderHeader({ title = ${luaArg(row.source, row.defaultValue)} }))`);
+		} else if (row.type === 'comment') {
+			lines.push(...luaComments([row.content], '        '));
 		} else if (row.type === 'section') {
 			lines.push(`        table.insert(${tableVar}, infobox:renderSection({`);
 			if (row.label) lines.push(`            title = ${luaString(row.label)},`);
@@ -515,7 +555,15 @@ function luaData(row) {
 }
 
 function luaComments(comments = [], indent = '') {
-	return comments.map(comment => `${indent}-- ${comment.replace(/^<!--\s*/, '').replace(/\s*-->$/, '')}`);
+	const result = [];
+	for (const comment of comments) {
+		const content = comment.replace(/^<!--\s*/, '').replace(/\s*-->$/, '');
+		const lines = content.split(/\r?\n/);
+		for (const line of lines) {
+			result.push(`${indent}-- ${line}`);
+		}
+	}
+	return result;
 }
 
 function render() {
