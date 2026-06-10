@@ -103,8 +103,20 @@ function wikitextParam(source, fallback) {
 }
 
 function luaArg(source, fallback) {
-	if (!source) return luaString(fallback ? fallback.replace(/^''$/, '') : '');
-	const defaultValue = (fallback && fallback !== "''") ? ' or ' + luaString(fallback) : '';
+	if (!source) {
+		if (fallback && fallback.startsWith('(') && fallback.includes('or')) {
+			return fallback;
+		}
+		return luaString(fallback ? fallback.replace(/^''$/, '') : '');
+	}
+	let defaultValue = '';
+	if (fallback && fallback !== "''") {
+		if (fallback.startsWith('(') && fallback.includes('or')) {
+			defaultValue = ' or ' + fallback;
+		} else {
+			defaultValue = ' or ' + luaString(fallback);
+		}
+	}
 	return 'args[' + luaString(source) + ']' + defaultValue;
 }
 
@@ -175,6 +187,14 @@ function parseBlocks(markup, notes) {
 						label: label || ('Tab ' + tabIndex++),
 						rows: children.filter(function(r) { return r.type !== 'label'; })
 					});
+				} else {
+					const nonSectionRows = parseBlocks(sub.body || sub.full, notes);
+					if (nonSectionRows.length) {
+						sections.push({
+							label: 'Tab ' + tabIndex++,
+							rows: nonSectionRows
+						});
+					}
 				}
 			}
 			rows.push({
@@ -364,7 +384,7 @@ function makeModuleOutput(model) {
 	}
 
 	const titleSource = model.title ? model.title.source : 'title';
-	const titleFallback = (model.title && model.title.defaultValue) ? model.title.defaultValue : (typeof mw !== 'undefined' ? mw.title.getCurrentTitle().text : 'Page Title');
+	const titleFallback = (model.title && model.title.defaultValue) ? model.title.defaultValue : "((mw and mw.title.getCurrentTitle().text) or 'Page Title')";
 	const titleComments = luaComments(model.title ? model.title.comments : [], '    ');
 	for (var j = 0; j < titleComments.length; j++) lines.push(titleComments[j]);
 	lines.push('    infobox:renderHeader({');
@@ -448,8 +468,9 @@ function renderLuaRows(lines, rows, tableVar) {
 			lines.push('            data = ' + luaData(row));
 			lines.push('        }))');
 		} else if (row.type === 'header') {
+			const headerValue = row.source ? luaArg(row.source, row.defaultValue || row.label) : luaString(row.label || row.defaultValue || '');
 			lines.push('        table.insert(' + tableVar + ', infobox:renderItem({');
-			lines.push('            data = ' + luaString("'''" + row.label + "'''"));
+			lines.push('            data = "\'\'\'" .. ' + headerValue + ' .. "\'\'\'"');
 			lines.push('        }))');
 		} else if (row.type === 'image') {
 			lines.push('        table.insert(' + tableVar + ', infobox:renderImage(' + luaArg(row.source, row.defaultValue) + '))');
