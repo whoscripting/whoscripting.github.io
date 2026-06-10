@@ -163,6 +163,10 @@ h2 {
 
 .panel-head-details {
 	flex: 1;
+	
+	@media (max-width: 800px) {
+		width: 100%;
+	}
 }
 
 .panel-head p,
@@ -212,6 +216,11 @@ input {
 	color: var(--text);
 	background: #0c0c0c;
 	font-family: "Cascadia Code", monospace;
+	word-break: break-all;
+
+	@media (max-width: 800px) {
+		font-size: small;
+	}
 }
 
 textarea {
@@ -252,10 +261,10 @@ pre {
 	padding: 2rem 0 0 0;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 800px) {
 	.shell {
 		width: min(100vw - 20px, 720px);
-		padding: 10px 0;
+		/* padding: 10px 0; */
 	}
 
 	.intro,
