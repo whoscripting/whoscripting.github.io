@@ -76,31 +76,63 @@ function noIncludeInner(input) {
 
 function readBlocks(markup) {
 	const blocks = [];
-	const tokenPattern = /<(title|image|header|data|group)\b[^>]*(?:\/>|>)/ig;
+	const tokenPattern = /<(title|image|header|data|group|panel|section|label)\b[^>]*(?:\/>|>)|<!--[\s\S]*?-->/ig;
 	let match;
+	let pendingComments = [];
 
 	while ((match = tokenPattern.exec(markup)) !== null) {
+		if (match[0].startsWith('<!--')) {
+			pendingComments.push(match[0]);
+			continue;
+		}
 		const tagName = match[1].toLowerCase();
 		const openTag = match[0];
 		const start = match.index;
 
 		if (openTag.endsWith('/>')) {
-			blocks.push({ tagName, openTag, body: '', full: openTag, start });
+			blocks.push({ tagName, openTag, body: '', full: openTag, start, comments: pendingComments });
+			pendingComments = [];
 			continue;
 		}
 
-		const closePattern = new RegExp(`</${tagName}>`, 'ig');
-		closePattern.lastIndex = tokenPattern.lastIndex;
-		const close = closePattern.exec(markup);
-		if (!close) {
-			blocks.push({ tagName, openTag, body: '', full: openTag, start });
-			continue;
+		let depth = 1;
+		let bodyEnd = -1;
+		let fullEnd = -1;
+
+		const searchPattern = new RegExp(`(<${tagName}\\b[^>]*(?:\\/>|>))|(</${tagName}>)|<!--[\\s\\S]*?-->`, 'ig');
+		searchPattern.lastIndex = tokenPattern.lastIndex;
+
+		let subMatch;
+		while ((subMatch = searchPattern.exec(markup)) !== null) {
+			if (subMatch[1]) {
+				if (!subMatch[1].endsWith('/>')) {
+					depth++;
+				}
+			} else if (subMatch[2]) {
+				depth--;
+				if (depth === 0) {
+					bodyEnd = subMatch.index;
+					fullEnd = searchPattern.lastIndex;
+					break;
+				}
+			}
 		}
 
-		const body = markup.slice(tokenPattern.lastIndex, close.index);
-		const full = markup.slice(start, close.index + close[0].length);
-		blocks.push({ tagName, openTag, body, full, start });
-		tokenPattern.lastIndex = close.index + close[0].length;
+		if (depth === 0) {
+			const body = markup.slice(tokenPattern.lastIndex, bodyEnd);
+			const full = markup.slice(start, fullEnd);
+			blocks.push({ tagName, openTag, body, full, start, comments: pendingComments });
+			pendingComments = [];
+			tokenPattern.lastIndex = fullEnd;
+		} else {
+			// No matching close tag found
+			blocks.push({ tagName, openTag, body: '', full: openTag, start, comments: pendingComments });
+			pendingComments = [];
+		}
+	}
+
+	if (pendingComments.length > 0) {
+		blocks.push({ tagName: 'comment', comments: pendingComments });
 	}
 
 	return blocks;
@@ -121,26 +153,142 @@ function luaString(value) {
 	return `'${String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n')}'`;
 }
 
+function parseBlocks(markup, notes) {
+	const blocks = readBlocks(markup);
+	const rows = [];
+
+	for (const block of blocks) {
+		if (block.comments && block.comments.length > 0) {
+			for (const comment of block.comments) {
+				rows.push({
+					type: 'comment',
+					content: comment
+				});
+			}
+		}
+
+		const tagName = block.tagName;
+		if (tagName === 'comment') {
+			continue;
+		}
+
+		if (tagName === 'title') {
+			rows.push({
+				type: 'title',
+				source: attrValue(block.openTag, 'source'),
+				defaultValue: stripTags(childContent(block.full, 'default')),
+				comments: []
+			});
+		} else if (tagName === 'image') {
+			rows.push({
+				type: 'image',
+				source: attrValue(block.openTag, 'source') || 'image',
+				captionSource: childAttr(block.full, 'caption', 'source'),
+				captionDefault: stripTags(childContent(block.full, 'caption')),
+				defaultValue: stripTags(childContent(block.full, 'default')),
+				comments: []
+			});
+		} else if (tagName === 'header') {
+			rows.push({
+				type: 'header',
+				label: stripTags(block.body),
+				source: attrValue(block.openTag, 'source'),
+				defaultValue: stripTags(childContent(block.full, 'default')),
+				comments: []
+			});
+		} else if (tagName === 'data') {
+			rows.push(readDataBlock(block));
+		} else if (tagName === 'label') {
+			rows.push({
+				type: 'label',
+				body: stripTags(block.body)
+			});
+		} else if (tagName === 'group' || tagName === 'section') {
+			const children = parseBlocks(block.body, notes);
+			const titleRow = children.find(r => r.type === 'label' || r.type === 'header');
+			const label = titleRow ? (titleRow.label || titleRow.body) : '';
+			rows.push({
+				type: 'section',
+				label: label,
+				rows: children.filter(r => r !== titleRow)
+			});
+			if (tagName === 'group' && /layout\s*=\s*["']?horizontal/i.test(block.openTag)) {
+				notes.push('Horizontal groups are preserved as a section, but exact PortableInfobox mobile layout cannot be inferred.');
+			}
+		} else if (tagName === 'panel') {
+			const sections = [];
+			const subBlocks = readBlocks(block.body);
+			let tabIndex = 1;
+			let defaultSectionRows = [];
+
+			for (const sub of subBlocks) {
+				if (sub.tagName === 'section') {
+					if (defaultSectionRows.length > 0) {
+						sections.push({
+							type: 'section',
+							label: `Tab ${tabIndex++}`,
+							rows: defaultSectionRows
+						});
+						defaultSectionRows = [];
+					}
+					const children = parseBlocks(sub.body, notes);
+					const titleRow = children.find(r => r.type === 'label' || r.type === 'header');
+					const label = titleRow ? (titleRow.label || titleRow.body) : '';
+					sections.push({
+						type: 'section',
+						label: label || `Tab ${tabIndex++}`,
+						rows: children.filter(r => r !== titleRow)
+					});
+				} else if (sub.tagName === 'comment') {
+					for (const comment of sub.comments) {
+						defaultSectionRows.push({ type: 'comment', content: comment });
+					}
+				} else {
+					const parsed = parseBlocks(sub.full, notes);
+					defaultSectionRows.push(...parsed);
+				}
+			}
+
+			if (defaultSectionRows.length > 0) {
+				sections.push({
+					type: 'section',
+					label: `Tab ${tabIndex++}`,
+					rows: defaultSectionRows
+				});
+			}
+
+			rows.push({
+				type: 'panel',
+				sections: sections
+			});
+		}
+	}
+	return rows;
+}
+
 function parsePortableInfobox(input) {
 	const notes = [];
 	const sourceBody = includeOnlyInner(input);
 	const inner = topLevelInner(sourceBody);
-	const blocks = readBlocks(inner);
+	const rows = parseBlocks(inner, notes);
 	const bounds = infoboxOuterBounds(sourceBody);
 	const noinclude = noIncludeInner(input);
 	const noincludeContent = cleanText(noinclude);
+
+	const title = rows.find(r => r.type === 'title');
+	const image = rows.find(r => r.type === 'image');
+
 	const model = {
-		title: null,
-		subtitle: null,
-		image: null,
-		rows: [],
+		title: title || null,
+		image: image || null,
+		rows: rows.filter(r => r !== title && r !== image),
 		leadingComments: readLeadingComments(input),
 		includePrelude: bounds ? cleanText(sourceBody.slice(0, bounds.start)) : '',
 		includePostlude: bounds ? cleanText(sourceBody.slice(bounds.end)) : '',
 		hasIncludeOnly: /<includeonly\b/i.test(input),
 		hasNoInclude: /<noinclude\b/i.test(input),
 		noincludeContent,
-		rawBlockCount: blocks.length
+		rawBlockCount: rows.length
 	};
 
 	if (!input.trim()) {
@@ -152,72 +300,31 @@ function parsePortableInfobox(input) {
 		notes.push('No <infobox> wrapper was found, so the whole input was treated as infobox contents.');
 	}
 
-	for (const block of blocks) {
-		if (block.tagName === 'title') {
-			model.title = {
-				source: attrValue(block.openTag, 'source'),
-				defaultValue: stripTags(childContent(block.full, 'default')),
-				comments: readComments(block.full)
-			};
-			continue;
-		}
-
-		if (block.tagName === 'image') {
-			model.image = {
-				source: attrValue(block.openTag, 'source') || 'image',
-				captionSource: childAttr(block.full, 'caption', 'source'),
-				captionDefault: stripTags(childContent(block.full, 'caption')),
-				defaultValue: stripTags(childContent(block.full, 'default')),
-				comments: readComments(block.full)
-			};
-			continue;
-		}
-
-		if (block.tagName === 'header') {
-			model.rows.push({
-				type: 'header',
-				label: stripTags(block.body),
-				source: attrValue(block.openTag, 'source'),
-				defaultValue: stripTags(childContent(block.full, 'default')),
-				comments: readComments(block.full)
-			});
-			continue;
-		}
-
-		if (block.tagName === 'data') {
-			model.rows.push(readDataBlock(block));
-			continue;
-		}
-
-		if (block.tagName === 'group') {
-			const groupBlocks = readBlocks(block.body);
-			const groupHeader = groupBlocks.find(item => item.tagName === 'header');
-			const groupRows = groupBlocks.filter(item => item.tagName === 'data').map(readDataBlock);
-			model.rows.push({
-				type: 'section',
-				label: groupHeader ? stripTags(groupHeader.body) : '',
-				rows: groupRows
-			});
-			if (/layout\s*=\s*["']?horizontal/i.test(block.openTag)) {
-				notes.push('Horizontal groups are preserved as a section, but exact PortableInfobox mobile layout cannot be inferred.');
-			}
-		}
-	}
-
 	if (!model.title) notes.push('No title tag was found. The generated output falls back to the page title.');
 	if (!model.image) notes.push('No image tag was found. You can add one manually if the target infobox needs it.');
 	if (model.image?.captionSource || model.image?.captionDefault) {
 		notes.push('InfoboxNeue fromArgs/renderImage does not expose an image caption slot in the documented Star Citizen/Dovedale version.');
 	}
 	if (!model.rows.length) notes.push('No data rows were found.');
-	if (/<(?:panel|navigation|audio|video)\b/i.test(input)) {
+	if (/<(?:navigation|audio|video)\b/i.test(input)) {
 		notes.push('Some specialized PortableInfobox tags were detected and are not converted automatically.');
+	}
+	if (hasAnyPanel(model.rows)) {
+		notes.push('Panels are converted to tabbers for Module output, but are ignored in Template output.');
 	}
 	if (model.leadingComments.length) notes.push('Template comments were preserved in the generated output.');
 	if (model.includePrelude || model.includePostlude) notes.push('Wikitext outside the infobox was preserved inside includeonly output.');
 	if (model.noincludeContent) notes.push('Noinclude content was preserved because it existed in the source.');
 
 	return { model, notes };
+}
+
+function hasAnyPanel(rows) {
+	for (const row of rows) {
+		if (row.type === 'panel') return true;
+		if (row.type === 'section' && hasAnyPanel(row.rows)) return true;
+	}
+	return false;
 }
 
 function readLeadingComments(input) {
@@ -242,62 +349,64 @@ function readDataBlock(block) {
 		label: stripTags(childContent(block.full, 'label')),
 		defaultValue: stripTags(childContent(block.full, 'default')),
 		formatValue: cleanText(childContent(block.full, 'format')),
-		comments: readComments(block.full)
+		comments: []
 	};
 }
 
 function makeTemplateOutput(model) {
-	const rows = [];
+	const lines = [];
 	const titleSource = model.title?.source || 'title';
 	const titleFallback = model.title?.defaultValue || '{{PAGENAME}}';
 	let sectionIndex = 1;
 	let itemIndex = 1;
 
-	rows.push(...model.leadingComments);
-	if (model.leadingComments.length) rows.push('');
-	if (model.hasIncludeOnly) rows.push('<includeonly>');
-	if (model.includePrelude) rows.push(model.includePrelude);
-	rows.push('{{InfoboxNeue');
-	rows.push(`| title = ${wikitextParam(titleSource, titleFallback)}`);
+	lines.push(...model.leadingComments);
+	if (model.leadingComments.length) lines.push('');
+	if (model.hasIncludeOnly) lines.push('<includeonly>');
+	if (model.includePrelude) lines.push(model.includePrelude);
+	lines.push('{{InfoboxNeue');
+	lines.push(`| title = ${wikitextParam(titleSource, titleFallback)}`);
 
 	if (model.image) {
-		rows.push(...prefixComments(model.image.comments));
-		rows.push(`| image = ${wikitextParam(model.image.source, model.image.defaultValue)}`);
+		lines.push(`| image = ${wikitextParam(model.image.source, model.image.defaultValue)}`);
 	}
 
-	for (const entry of model.rows) {
-		if (entry.type === 'section') {
-			if (entry.label) {
-				rows.push(`| section${sectionIndex} = ${entry.label}`);
+	function renderRows(rows) {
+		for (const entry of rows) {
+			if (entry.type === 'panel') {
+				renderRows(entry.sections);
+				continue;
+			}
+			if (entry.type === 'section') {
+				if (entry.label) {
+					lines.push(`| section${sectionIndex} = ${entry.label}`);
+					sectionIndex += 1;
+				}
+				renderRows(entry.rows);
+			} else if (entry.type === 'header') {
+				lines.push(`| section${sectionIndex} = ${entry.label || wikitextParam(entry.source, entry.defaultValue)}`);
 				sectionIndex += 1;
-			}
-			for (const child of entry.rows) {
-				rows.push(...prefixComments(child.comments));
-				rows.push(`| label${itemIndex} = ${child.label || titleCase(child.source)}`);
-				rows.push(`| content${itemIndex} = ${templateContent(child)}`);
+			} else if (entry.type === 'data') {
+				lines.push(`| label${itemIndex} = ${entry.label || titleCase(entry.source)}`);
+				lines.push(`| content${itemIndex} = ${templateContent(entry)}`);
 				itemIndex += 1;
+			} else if (entry.type === 'comment') {
+				lines.push(entry.content);
 			}
-		} else if (entry.type === 'header') {
-			rows.push(...prefixComments(entry.comments));
-			rows.push(`| section${sectionIndex} = ${entry.label || wikitextParam(entry.source, entry.defaultValue)}`);
-			sectionIndex += 1;
-		} else {
-			rows.push(...prefixComments(entry.comments));
-			rows.push(`| label${itemIndex} = ${entry.label || titleCase(entry.source)}`);
-			rows.push(`| content${itemIndex} = ${templateContent(entry)}`);
-			itemIndex += 1;
 		}
 	}
 
-	rows.push('}}');
-	if (model.includePostlude) rows.push(model.includePostlude);
-	if (model.hasIncludeOnly) rows.push('</includeonly>');
+	renderRows(model.rows);
+
+	lines.push('}}');
+	if (model.includePostlude) lines.push(model.includePostlude);
+	if (model.hasIncludeOnly) lines.push('</includeonly>');
 	if (model.hasNoInclude && model.noincludeContent) {
-		rows.push('<noinclude>');
-		rows.push(model.noincludeContent);
-		rows.push('</noinclude>');
+		lines.push('<noinclude>');
+		lines.push(model.noincludeContent);
+		lines.push('</noinclude>');
 	}
-	return rows.join('\n');
+	return lines.join('\n');
 }
 
 function prefixComments(comments = []) {
@@ -309,33 +418,43 @@ function templateContent(row) {
 }
 
 function makeModuleOutput(model) {
+	const hasPanel = hasAnyPanel(model.rows);
 	const lines = [
 		'local p = {}',
 		'',
 		"local getArgs = require('Module:Arguments').getArgs",
 		"local InfoboxNeue = require('Module:InfoboxNeue')",
+	];
+
+	if (hasPanel) {
+		lines.push("local tabber = require('Module:Tabber').renderTabber");
+	}
+
+	lines.push(
 		'',
 		`function p.main(frame)`,
 		'    local args = getArgs(frame)',
 		'    local infobox = InfoboxNeue:new()',
 		''
-	];
+	);
 
 	if (model.image) {
-		lines.push(...luaComments(model.image.comments, '    '));
-		lines.push(`    infobox:renderImage(${luaArg(model.image.source)})`);
+		lines.push(`    infobox:renderImage(${luaArg(model.image.source, model.image.defaultValue)})`);
 		lines.push('');
 	}
 
 	const titleSource = model.title?.source || 'title';
-	const titleFallback = model.title?.defaultValue || mw.title.getCurrentTitle().text;
-	lines.push(...luaComments(model.title?.comments, '    '));
+	const titleFallback = (typeof mw !== 'undefined' ? mw.title.getCurrentTitle().text : 'Page Title');
 	lines.push('    infobox:renderHeader({');
-	lines.push(`        title = ${luaArg(titleSource, titleFallback)}`);
+	lines.push(`        title = ${luaArg(titleSource, titleFallback)},`);
 	lines.push('    })');
 
 	for (const section of makeModuleSections(model.rows)) {
-		renderLuaSection(lines, section);
+		if (section.type === 'panel') {
+			renderLuaPanel(lines, section);
+		} else {
+			renderLuaSection(lines, section);
+		}
 	}
 
 	lines.push('');
@@ -351,8 +470,8 @@ function makeModuleSections(rows) {
 	let current = { label: '', rows: [] };
 
 	for (const row of rows) {
-		if (row.type === 'section') {
-			if (current.rows.length) sections.push(current);
+		if (row.type === 'panel' || row.type === 'section') {
+			if (current.rows.length || current.label) sections.push(current);
 			sections.push(row);
 			current = { label: '', rows: [] };
 		} else if (row.type === 'header') {
@@ -368,22 +487,99 @@ function makeModuleSections(rows) {
 }
 
 function renderLuaSection(lines, section) {
+	if (section.type === 'section') {
+		lines.push('');
+		lines.push('    do');
+		lines.push('        local sectionRows = {}');
+		renderLuaRows(lines, section.rows, 'sectionRows');
+		lines.push('        infobox:renderSection({');
+		if (section.label) lines.push(`            title = ${luaString(section.label)},`);
+		lines.push('            content = table.concat(sectionRows)');
+		lines.push('        })');
+		lines.push('    end');
+		return;
+	}
+
 	const label = section.label || '';
 	lines.push('');
 	lines.push('    do');
 	lines.push('        local sectionRows = {}');
-
-	for (const row of section.rows) {
-		lines.push(...luaComments(row.comments, '        '));
-		lines.push('        table.insert(sectionRows, infobox:renderItem({');
-		lines.push(`            label = ${luaString(row.label || titleCase(row.source))},`);
-		lines.push(`            data = ${luaData(row)}`);
-		lines.push('        }))');
-	}
-
+	renderLuaRows(lines, section.rows, 'sectionRows');
 	lines.push('        infobox:renderSection({');
 	if (label) lines.push(`            title = ${luaString(label)},`);
 	lines.push('            content = table.concat(sectionRows)');
+	lines.push('        })');
+	lines.push('    end');
+}
+
+function renderLuaRows(lines, rows, tableVar) {
+	for (const row of rows) {
+		if (row.type === 'data') {
+			lines.push(`        table.insert(${tableVar}, infobox:renderItem({`);
+			lines.push(`            label = ${luaString(row.label || titleCase(row.source))},`);
+			lines.push(`            data = ${luaData(row)}`);
+			lines.push('        }))');
+		} else if (row.type === 'header') {
+			let resolvedLabel;
+			if (row.label) {
+				resolvedLabel = luaString(row.label);
+			} else {
+				resolvedLabel = luaArg(row.source, row.defaultValue);
+			}
+			lines.push(`        table.insert(${tableVar}, infobox:renderItem({`);
+			lines.push(`            data = "'''" .. ${resolvedLabel} .. "'''"`);
+			lines.push('        }))');
+		} else if (row.type === 'image') {
+			lines.push(`        table.insert(${tableVar}, infobox:renderImage(${luaArg(row.source, row.defaultValue)}))`);
+		} else if (row.type === 'title') {
+			lines.push(`        table.insert(${tableVar}, infobox:renderHeader({ title = ${luaArg(row.source, row.defaultValue)} }))`);
+		} else if (row.type === 'comment') {
+			lines.push(...luaComments([row.content], '        '));
+		} else if (row.type === 'section') {
+			lines.push(`        table.insert(${tableVar}, infobox:renderSection({`);
+			if (row.label) lines.push(`            title = ${luaString(row.label)},`);
+			lines.push('            content = (function()');
+			lines.push('                local nestedRows = {}');
+			renderLuaRows(lines, row.rows, 'nestedRows');
+			lines.push('                return table.concat(nestedRows)');
+			lines.push('            end)()');
+			lines.push('        }, true))');
+		} else if (row.type === 'panel') {
+			lines.push(`        table.insert(${tableVar}, (function()`);
+			lines.push('            local tabberData = {}');
+			row.sections.forEach((tab, index) => {
+				const idx = index + 1;
+				lines.push(`            tabberData['label${idx}'] = ${luaString(tab.label)}`);
+				lines.push('            do');
+				lines.push('                local innerRows = {}');
+				renderLuaRows(lines, tab.rows, 'innerRows');
+				lines.push(`                tabberData['content${idx}'] = infobox:renderSection({ content = table.concat(innerRows) }, true)`);
+				lines.push('            end');
+			});
+			lines.push('            return tabber(tabberData)');
+			lines.push('        end)())');
+		}
+	}
+}
+
+function renderLuaPanel(lines, panel) {
+	lines.push('');
+	lines.push('    do');
+	lines.push('        local tabberData = {}');
+
+	panel.sections.forEach((tab, index) => {
+		const idx = index + 1;
+		lines.push(`        tabberData['label${idx}'] = ${luaString(tab.label)}`);
+		lines.push('        do');
+		lines.push('            local sectionRows = {}');
+		renderLuaRows(lines, tab.rows, 'sectionRows');
+		lines.push(`            tabberData['content${idx}'] = infobox:renderSection({ content = table.concat(sectionRows) }, true)`);
+		lines.push('        end');
+	});
+
+	lines.push('        infobox:renderSection({');
+	lines.push("            class = 'infobox__section--tabber',");
+	lines.push('            content = tabber(tabberData)');
 	lines.push('        })');
 	lines.push('    end');
 }
@@ -399,7 +595,15 @@ function luaData(row) {
 }
 
 function luaComments(comments = [], indent = '') {
-	return comments.map(comment => `${indent}-- ${comment.replace(/^<!--\s*/, '').replace(/\s*-->$/, '')}`);
+	const result = [];
+	for (const comment of comments) {
+		const content = comment.replace(/^<!--\s*/, '').replace(/\s*-->$/, '');
+		const lines = content.split(/\r?\n/);
+		for (const line of lines) {
+			result.push(`${indent}-- ${line}`);
+		}
+	}
+	return result;
 }
 
 function render() {
