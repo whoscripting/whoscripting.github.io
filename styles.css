@@ -1,12 +1,12 @@
 :root {
 	color-scheme: dark;
-	--bg: #080b12;
-	--panel: #1a1a1a;
+	--bg: #0c0f0a;
+	--panel: #1D2917;
 	--line: rgba(255, 255, 255, .05);
 	--line-strong: #3d4c64;
 	--text: #ecf2ff;
 	--muted: #9eacc0;
-	--accent: #4fd1c5;
+	--accent: #2C4F1D;
 	--accent-strong: #f6c85f;
 	--danger: #ff7a90;
 	--shadow: 0 20px 60px rgba(0, 0, 0, .42);
@@ -21,16 +21,30 @@ body {
 	margin: 0;
 	min-height: 100vh;
 	color: var(--text);
+	background: var(--bg);
 
 	&::before {
 		content: '';
 		position: absolute;
 		inset: 0;
+		background: url(bridge.png);
+		background-size: cover;
+		background-position: center;
+		background-repeat: no-repeat;
+		z-index: -1;
+		height: 50vh;
+		mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.4) 50%, transparent 100%);
+	}
+
+	&::after {
+		content: '';
+		position: fixed;
+		inset: 0;
 		background: url(frosted-texture.png);
 		background-repeat: repeat;
 		background-size: 200px 200px;
 		opacity: 0.1;
-		z-index: -1;
+		z-index: -2;
 	}
 }
 
@@ -43,7 +57,7 @@ textarea {
 button {
 	min-height: 38px;
 	border-radius: 7px;
-	background: #182232;
+	background: #2C4F1D;
 	color: var(--text);
 	cursor: pointer;
 	transition: border-color .16s ease, background .16s ease, transform .16s ease;
@@ -59,7 +73,11 @@ button {
 }
 
 a {
-	color: var(--accent);
+	color: #C4EFAC;
+}
+
+a:not(:hover) {
+	text-decoration: none;
 }
 
 code {
@@ -93,15 +111,15 @@ code {
 		font-variation-settings: "ROND" 100;
 	}
 
-	> img {
+	/* > img {
 		position: absolute;
 		z-index: -1;
 		top: 50%;
 		left: 50%;
 		transform: translate(-50%, -60%);
-		opacity: 0.15;
+		opacity: 0.35;
 		height: 150%;
-	}
+	} */
 }
 
 .intro h1 {
@@ -122,7 +140,7 @@ h1 {
 	font-size: clamp(2rem, 4vw, 4.2rem);
 	line-height: .96;
 	letter-spacing: 0;
-	font-variation-settings: "ROND" 50;
+	font-variation-settings: "ROND" 80;
 }
 
 h2 {
@@ -139,8 +157,9 @@ h2 {
 
 .panel {
 	border: 1px solid var(--line);
-	border-radius: 8px;
-	background: var(--panel);
+	border-radius: 16px;
+	background: oklch(from var(--panel) l c h / 0.5);
+	backdrop-filter: blur(12px) saturate(1.2);
 	box-shadow: var(--shadow);
 	overflow: hidden;
 }
@@ -192,7 +211,7 @@ h2 {
 	display: flex;
 	justify-content: center;
 	align-items: center;
-	background: #111;
+	background: #3E4A36;
 }
 
 .segmented button {
@@ -203,7 +222,7 @@ h2 {
 
 	&.active {
 		background: var(--accent);
-		color: #06110f;
+		color: #B9E3A1;
 		font-weight: 700;
 		font-variation-settings: "ROND" 100;
 	}
@@ -214,7 +233,7 @@ pre,
 input {
 	border: 0;
 	color: var(--text);
-	background: #0c0c0c;
+	background: #1D211A;
 	font-family: "Cascadia Code", monospace;
 	word-break: break-all;
 
