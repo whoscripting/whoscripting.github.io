@@ -9,7 +9,7 @@ document.addEventListener("mousemove", e => {
     mouseY = e.clientY / window.innerHeight * 20 - 10;
 });
 
-const tweets = document.querySelectorAll(".whosnipping");
+const tweets = document.querySelectorAll(".whoscripting");
 
 function update() {
     lerpedX += (mouseX - lerpedX) * 0.05;
