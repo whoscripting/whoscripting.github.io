@@ -1,0 +1,94 @@
+:root {
+	color-scheme: dark;
+	--bg: #0a0f0f;
+	--panel: #172529;
+	--line: rgba(255, 255, 255, .05);
+	--line-strong: #3d4c64;
+	--text: #ecf2ff;
+	--muted: #9eacc0;
+	--accent: #1d4d4f;
+	--accent-strong: #f6c85f;
+	--danger: #ff7a90;
+	--shadow: 0 20px 60px rgba(0, 0, 0, .42);
+	font-family: "Google Sans Flex", sans-serif;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	min-height: 100vh;
+	color: var(--text);
+	background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+
+	&::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: url(/clouds.png);
+		background-size: cover;
+		background-position: center;
+		background-repeat: no-repeat;
+		z-index: -1;
+		mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.2) 50%, transparent 100%);
+	}
+
+	&::after {
+		content: '';
+		position: fixed;
+		inset: 0;
+		background: url(frosted-texture.png);
+		background-repeat: repeat;
+		background-size: 200px 200px;
+		opacity: 0.1;
+		z-index: -2;
+	}
+}
+
+.whosnipping {
+    font-size: clamp(2rem, 5vw, 4rem);
+    font-weight: bold;
+    text-align: center;
+    font-variation-settings: 'ROND' 100;
+	mix-blend-mode: difference;
+	pointer-events: none;
+}
+
+.written-text {
+	font-size: 1rem;
+	text-align: center;
+	color: var(--muted);
+	margin-bottom: 2rem;
+
+	a {
+		font-weight: bold;
+		text-decoration: unset!important;
+	}
+}
+
+.tools-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+
+    a {
+        padding: .5rem 1rem;
+        border-radius: 1rem;
+		font-size: 1rem;
+        background: var(--panel);
+        text-decoration: unset!important;
+        color: white!important;
+		transition: all .25s;
+
+        &:hover {
+            transform: scale(1.1);
+			font-weight: bold;
+        }
+    }
+}

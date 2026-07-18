@@ -4,10 +4,10 @@
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>⌗ PortableBridge — PortableInfobox to InfoboxNeue converter</title>
+	<title>whosnipping</title>
 	<meta name="description" content="Useful utility to convert PortableInfobox templates to InfoboxNeue templates or modules.">
-	<link rel="icon" href="tools.png">
-	<link rel="stylesheet" href="styles.css">
+	<link rel="icon" href="../tools.png">
+	<link rel="stylesheet" href="/landing/landing.css">
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link
@@ -17,74 +17,13 @@
 </head>
 
 <body>
-	<main class="shell">
-		<section class="workspace" aria-label="PortableInfobox converter">
-			<div class="intro">
-				<h1>PortableBridge</h1>
-				<div>PortableInfobox to InfoboxNeue converter</div>
-				<!-- <img src="tools.png" height="50"> -->
-			</div>
+    <div class="whosnipping">whosnipping</div>
+    <div class="written-text">by <a href="https://grids.so/stack" target="_blank">whostacking</a> | <a href="https://github.com/whostacking/whosnipping" target="_blank">Source code</a></div>
 
-			<ul id="notesList" aria-live="polite" aria-atomic="true"></ul>
-			
-			<div class="tool-grid">
-				<section class="panel input-panel" aria-label="PortableInfobox input">
-					<div class="panel-head">
-						<div class="panel-head-details">
-							<h2>Portable infobox</h2>
-							<p>Paste <code>&lt;infobox&gt;</code> markup</p>
-						</div>
-					</div>
-					<textarea id="sourceInput" spellcheck="false" placeholder="<infobox>
-  <title source=&quot;name&quot; />
-  <image source=&quot;image&quot;>
-    <caption source=&quot;imagecaption&quot; />
-  </image>
-  <data source=&quot;occupation&quot;>
-    <label>Occupation</label>
-  </data>
-</infobox>"></textarea>
-				</section>
+    <div class="tools-wrapper">
+        <a href="/bucket" class="tool-link">Cargo ➔ Bucket</a>
+        <a href="/neue" class="tool-link">PortableInfobox ➔ InfoboxNeue</a>
+    </div>
 
-				<section class="panel output-panel" aria-label="InfoboxNeue output">
-					<div class="panel-head">
-						<div class="panel-head-details">
-							<h2>InfoboxNeue</h2>
-							<p>Copy generated output</p>
-						</div>
-						<div class="segmented" role="tablist" aria-label="Output type">
-							<button type="button" class="active" id="templateTab" role="tab"
-								aria-selected="true">Template</button>
-							<button type="button" id="moduleTab" role="tab" aria-selected="false">Module</button>
-						</div>
-						<button type="button" id="copyButton" title="Copy output">
-							<span class="material-symbols-outlined">content_copy</span>
-						</button>
-					</div>
-					<pre id="outputBox" tabindex="0"></pre>
-				</section>
-			</div>
-
-			<section class="diagnostics" aria-label="Conversion notes">
-				<p>
-					Based on PortableInfobox tags and parameters from
-					<a href="https://portability.fandom.com/wiki/Portable_Infoboxes" target="_blank"
-						rel="noreferrer">Fandom wikis</a>
-					and
-					<a href="https://www.mediawiki.org/wiki/Extension:PortableInfobox" target="_blank"
-						rel="noreferrer">MediaWiki's PortableInfobox extension</a>.
-				</p>
-				<p>
-					InfoboxNeue uses
-					<code><a href="https://starcitizen.tools/Module:InfoboxNeue" target="_blank" rel="noreferrer">Module:InfoboxNeue</a></code>
-					and
-					<code><a href="https://starcitizen.tools/Template:InfoboxNeue" target="_blank" rel="noreferrer">Template:InfoboxNeue</a></code>
-					from the Star Citizen Wiki. © CC-BY-SA 4.0.
-				</p>
-			</section>
-		</section>
-	</main>
-	<script src="script.js"></script>
+    <script src="/landing/landing.js"></script>
 </body>
-
-</html>
