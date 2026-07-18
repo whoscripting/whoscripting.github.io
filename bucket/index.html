@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⌗ /bucket</title>
+    <meta name="description" content="MediaWiki migration utility to convert Cargo storing to Bucket storing.">
+	<link rel="icon" href="../tools.png">
+    <link rel="stylesheet" href="bucket.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link
+		href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wdth,wght,ROND@6..144,25..151,1..1000,0..100&family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap"
+		rel="stylesheet">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,700,1,0" />
+</head>
+<body>
+    <div class="shell">
+        <div class="workspace">
+            <div class="intro">
+                <h1>Cargo ➔ Bucket</h1>
+                <div>MediaWiki migration utility. Modules not supported.</div>
+            </div>
+
+            <!-- Notes Section at the Top -->
+            <div class="panel" style="padding: 20px; margin-bottom: 24px;">
+                <h2 style="color: var(--accent-strong); margin-bottom: 12px; font-size: 1.1rem; font-variation-settings: 'ROND' 100;">Important Migration Notes</h2>
+                <ul style="margin: 0; padding-left: 20px; line-height: 1.6; color: var(--muted); font-size: 0.95rem;">
+                    <li><strong>#cargo_declare</strong> is replaced with the <code>Bucket:</code> page and <strong>can be removed</strong> from your templates.</li>
+                    <li><strong>Parameter names</strong> must contain words (e.g. <code>twelve</code> instead of <code>12</code>). Numbers-only parameters are invalid in Bucket and will generate errors.</li>
+                    <li><strong>File</strong> type maps to <code>PAGE</code> in Bucket. You may need to manually add the file namespace prefix (e.g. <code>File:</code>) where appropriate.</li>
+                    <li><strong>Dates &amp; Times</strong>: Bucket's <code>BucketPut</code> supports <code>time</code> (stores ISO 8601 string, sortable TEXT) and <code>unixtime</code> (stores INTEGER). Both are sortable.</li>
+                    <li><strong>Coordinates</strong>: You can convert coordinates to JSON and store them as TEXT (with <code>index: false</code>).</li>
+                </ul>
+            </div>
+
+            <!-- Section 1: Schema Converter -->
+            <div style="margin-bottom: 2.5rem;">
+                <h2 class="section-heading">Schema Converter</h2>
+                <div class="tool-grid">
+                    <div class="panel input-panel">
+                        <div class="panel-head">
+                            <div class="panel-head-details">
+                                <h3>Cargo Structure Input</h3>
+                                <p>Paste Cargo fields from <code>Special:CargoTables</code>.</p>
+                            </div>
+                        </div>
+                        <textarea id="schemaInput" placeholder="one - Wikitext string&#10;two - File&#10;id - String&#10;three - Integer" spellcheck="false"></textarea>
+                    </div>
+
+                    <div class="panel output-panel">
+                        <div class="panel-head">
+                            <div class="panel-head-details">
+                                <h3>Bucket JSON Schema Output</h3>
+                                <p>Copy this JSON schema for your Bucket configuration.</p>
+                            </div>
+                            <div class="button-row">
+                                <button type="button" id="copySchemaButton" title="Copy output">
+                                    <span class="material-symbols-outlined">content_copy</span>
+                                </button>
+                            </div>
+                        </div>
+                        <pre id="schemaOutput">Output will appear here...</pre>
+                        <div id="schemaDiagnostics" class="diagnostics" style="padding: 16px; border-top: 1px solid var(--line); display: none;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 2: Store Converter -->
+            <div style="margin-bottom: 1.5rem;">
+                <h2 class="section-heading">Store Converter</h2>
+                <div class="tool-grid">
+                    <div class="panel input-panel">
+                        <div class="panel-head">
+                            <div class="panel-head-details">
+                                <h3>Cargo Store Input</h3>
+                                <p>Paste the <code>{{#cargo_store:_table=...}}</code> template call.</p>
+                            </div>
+                        </div>
+                        <textarea id="storeInput" placeholder="{{#cargo_store: _table= Table&#10;  | one = {{{one}}}&#10;  | two = {{{two}}}&#10;  | three = {{{three}}}&#10;}}" spellcheck="false"></textarea>
+                    </div>
+
+                    <div class="panel output-panel">
+                        <div class="panel-head">
+                            <div class="panel-head-details">
+                                <h3>Bucket Store Output</h3>
+                                <p>Copy this converted <code>{{#invoke:Bucket|put|...}}</code> call.</p>
+                            </div>
+                            <div class="button-row">
+                                <button id="copyStoreButton" title="Copy output">
+                                    <span class="material-symbols-outlined">content_copy</span>
+                                </button>
+                            </div>
+                        </div>
+                        <pre id="storeOutput">Output will appear here...</pre>
+                        <div id="storeDiagnostics" class="diagnostics" style="padding: 16px; border-top: 1px solid var(--line); display: none;"></div>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+    <script src="bucket.js"></script>
+</body>
+</html>
