@@ -189,7 +189,7 @@ function renderPopover() {
 	} else if (activeEditor.type === 'item') {
 		heading = 'Item';
 		const layout = activeEditor.sectionIndex === -1 ? 'grid' : state.sections[activeEditor.sectionIndex].layout || 'grid';
-		body = `<div class="field-stack">${layout === 'list' ? input('Title', 'data', target.data, { placeholder: 'Item data' }) + input('Description', 'description', target.description, { optional: true }) : input('Label', 'label', target.label, { optional: true, placeholder: 'Item label' }) + input('Data', 'data', target.data, { placeholder: 'Item data' })}${layout === 'grid' ? spanControl(target.span) : ''}</div><div class="popover-actions"><button class="remove-button" data-action="remove-item" type="button" aria-label="Remove item" title="Remove item"><span class="material-symbols-outlined">delete</span></button></div>`;
+		body = `<div class="field-stack">${layout === 'list' ? input('Title', 'data', target.data, { placeholder: 'Item data' }) + input('Description', 'description', target.description, { optional: true }) : input('Label', 'label', target.label, { optional: true, placeholder: 'Item label' }) + input('Data', 'data', target.data, { placeholder: 'Item data' })}${layout === 'grid' ? `${spanControl(target.span)}<p class="template-disclaimer">Column span is only available in Module output.</p>` : ''}</div><div class="popover-actions"><button class="remove-button" data-action="remove-item" type="button" aria-label="Remove item" title="Remove item"><span class="material-symbols-outlined">delete</span></button></div>`;
 	}
 
 	contextPopover.innerHTML = `<div class="popover-head"><h2>${heading}</h2><button class="close-button" data-action="close" type="button" aria-label="Close editor">×</button></div>${body}`;
