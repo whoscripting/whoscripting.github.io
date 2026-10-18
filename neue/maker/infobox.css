@@ -10,7 +10,7 @@
 		align-items: center;
 		width: 100%;
 		gap: 6px;
-		padding: 10px 12px;
+		padding: 12px 12px;
 		border: 1px solid var(--infobox-border);
 		border-bottom: 0!important;
 		border-radius: 10px 10px 0 0!important;
